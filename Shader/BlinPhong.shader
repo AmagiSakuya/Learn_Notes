@@ -1,16 +1,17 @@
-﻿Shader "Learn/ForwardRenderPathLight"
+﻿Shader "Learn/BlinPhong"
 {
 	Properties
 	{
 		_MainTex("Texture", 2D) = "white" {}
 		_NormalMap("NormalMap", 2D) = "bump" {}
-		_NormalInensity("NormalInensity",Range(0,1.0)) = 1.0
+		_NormalInensity("NormalInensity",Range(-1.0,1.0)) = 1.0
 		_SpecMaskMap("SpecMask", 2D) = "white" {}
 		_Shininess("Shininess",Range(0.01,100)) = 1.0
 		_SpecInensity("SpecInensity",Range(0.01,5)) = 1.0
 		_AOMap("AOMap", 2D) = "white" {}
 		_ParallaxMap("ParallaxMap", 2D) = "white" {} // 视差贴图
 		_ParallaxInensity("ParallaxInensity",Range(-5.0,5.0)) = 0.0
+		_AmbientInensity("AmbientInensity",Range(0,1.0)) = 0.0
 	}
 
 	SubShader
@@ -46,9 +47,9 @@
 				float4 pos : SV_POSITION;
 				float2 uv : TEXCOORD0;
 				float3 normal : TEXCOORD1;
-				float4 tangent : TEXCOORD3;
-				UNITY_SHADOW_COORDS(4)
-				float4 worldPos:TEXCOORD5;
+				float4 tangent : TEXCOORD2;
+				UNITY_SHADOW_COORDS(3)
+				float4 worldPos:TEXCOORD4;
 			};
 
 			sampler2D _MainTex;
@@ -60,7 +61,7 @@
 			float _SpecInensity;
 			sampler2D _ParallaxMap;
 			float _ParallaxInensity;
-
+			float _AmbientInensity;
 			float _Shininess;
 
 			//高动态范围
@@ -121,7 +122,7 @@
 				finalColor = diffuse * _LightColor0.rgb;
 				//获取环境光颜色
 				float3 ambient = UNITY_LIGHTMODEL_AMBIENT.rgb;
-				finalColor += ambient;
+				finalColor += ambient* _AmbientInensity;
 				//高光
 				float4 speceMaskMap = tex2D(_SpecMaskMap, uv_parallax);
 				//Phong 模型 耗性能
@@ -176,9 +177,9 @@
 				float4 pos : SV_POSITION;
 				float2 uv : TEXCOORD0;
 				float3 normal : TEXCOORD1;
-				float4 tangent : TEXCOORD3;
-				UNITY_SHADOW_COORDS(4)
-				float4 worldPos:TEXCOORD5;
+				float4 tangent : TEXCOORD2;
+				UNITY_SHADOW_COORDS(3)
+				float4 worldPos:TEXCOORD4;
 			};
 
 			sampler2D _MainTex;
