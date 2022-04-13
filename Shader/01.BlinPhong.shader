@@ -2,13 +2,14 @@
 {
 	Properties
 	{
-		_MainTex("MainTex", 2D) = "white" {}
-		_Color("Color", Color) = (1,1,1,1)
+		_MainTex("Albedo", 2D) = "white" {} 
+		_Color("AlbedoColor", Color) = (1.0,1.0,1.0,1.0)
 		_NormalMap("NormalMap", 2D) = "bump" {}
-		_NormalInensity("NormalInensity",Range(-1.0,1.0)) = 1.0
+		_NormalInensity("NormalMapPower",Range(0.0,1.0)) = 1.0
 		_SpecMaskMap("SpecMask", 2D) = "white" {}
-		_Shininess("Shininess",Range(0.01,100)) = 1.0
-		_SpecInensity("SpecInensity",Range(0.01,5)) = 1.0
+		_SpecMaskContrast("SpecMaskContrast",Range(0.0,10.0)) = 1.0
+		_SpecInensity("SpecInensity",Range(0.0,10.0)) = 1.0
+		_SpecRange("SpecRange",Range(0,1.0)) = 0.0
 		_AOMap("AOMap", 2D) = "white" {}
 		_AOContrast("AOContrast",Range(0.0,10.0)) = 1.0
 		_AOBrightness("AOBrightness",Range(0.0,10.0)) = 1.0
@@ -48,19 +49,20 @@
 			float4 _Color;
 			sampler2D _NormalMap;
 			float _NormalInensity;
-			sampler2D _AOMap;
 			sampler2D _SpecMaskMap;
+			float _SpecRange;
 			float _SpecInensity;
+			float _SpecMaskContrast;
 			sampler2D _ParallaxMap;
 			float _ParallaxInensity;
 			float _AmbientInensity;
-			float _Shininess;
 			float _Reflectivity;
 			sampler2D _Roughness;
 			float _RoughnessContrast;
 			float _RoughnessBrightness;
 			float _RoughnessMin;
 			float _RoughnessMax;
+			sampler2D _AOMap;
 			float _AOContrast;
 			float _AOBrightness;
 
@@ -128,8 +130,9 @@
 				//Blinn-phong 模型
 				float3 reflect_dir = normalize(data.light_dir + data.view_dir);
 				float3 spec_color = max(0, dot(reflect_dir, data.normal));
-				spec_color = pow(spec_color, _Shininess) * _SpecInensity * speceMaskMap.rgb;
-				return spec_color * _LightColor0.rgb;
+				spec_color = pow(spec_color, 100.0 - _SpecRange * 100 ) * _SpecInensity;
+				float3 m_speceMaskMap = pow(speceMaskMap.rgb, _SpecMaskContrast);
+				return	m_speceMaskMap * spec_color * _LightColor0;
 			}
 
 			//实时间接镜面反射（反射探针）
@@ -198,6 +201,10 @@
 					finalColor = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
 					//直接高光_实时
 					finalColor += ReatimeDirectSpecCalc(speceMaskMap,data);
+					float3 reflect_dir = normalize(data.light_dir + data.view_dir);
+					float3 spec_color = max(0, dot(reflect_dir, data.normal));
+					spec_color = pow(spec_color, _SpecRange) * _SpecInensity * speceMaskMap.rgb;
+
 					//阴影与光线衰减_实时
 					UNITY_LIGHT_ATTENUATION(atten, i, data.worldPos);
 					finalColor *= atten;
@@ -212,6 +219,7 @@
 					finalColor = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
 					//直接高光_实时
 					finalColor += ReatimeDirectSpecCalc(speceMaskMap,data);
+
 					//阴影与光线衰减_实时
 					UNITY_LIGHT_ATTENUATION(atten, i, data.worldPos);
 					finalColor *= atten;
@@ -259,22 +267,22 @@
 			float4 _Color;
 			sampler2D _NormalMap;
 			float _NormalInensity;
-			sampler2D _AOMap;
-			float _AOContrast;
-			float _AOBrightness;
-
 			sampler2D _SpecMaskMap;
+			float _SpecRange;
 			float _SpecInensity;
+			float _SpecMaskContrast;
 			sampler2D _ParallaxMap;
 			float _ParallaxInensity;
 			float _AmbientInensity;
-			float _Shininess;
 			float _Reflectivity;
 			sampler2D _Roughness;
 			float _RoughnessContrast;
 			float _RoughnessBrightness;
 			float _RoughnessMin;
 			float _RoughnessMax;
+			sampler2D _AOMap;
+			float _AOContrast;
+			float _AOBrightness;
 			
 
 			struct appdata
@@ -341,8 +349,9 @@
 				//Blinn-phong 模型
 				float3 reflect_dir = normalize(data.light_dir + data.view_dir);
 				float3 spec_color = max(0, dot(reflect_dir, data.normal));
-				spec_color = pow(spec_color, _Shininess) * _SpecInensity * speceMaskMap.rgb;
-				return spec_color * _LightColor0.rgb;
+				spec_color = pow(spec_color, 100.0 - _SpecRange * 100) * _SpecInensity;
+				float3 m_speceMaskMap = pow(speceMaskMap.rgb, _SpecMaskContrast);
+				return	m_speceMaskMap * spec_color * _LightColor0;
 			}
 
 			//实时间接镜面反射（反射探针）
