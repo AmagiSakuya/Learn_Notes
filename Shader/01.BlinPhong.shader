@@ -10,6 +10,8 @@
 		_Shininess("Shininess",Range(0.01,100)) = 1.0
 		_SpecInensity("SpecInensity",Range(0.01,5)) = 1.0
 		_AOMap("AOMap", 2D) = "white" {}
+		_AOContrast("AOContrast",Range(0.0,10.0)) = 1.0
+		_AOBrightness("AOBrightness",Range(0.0,10.0)) = 1.0
 		_ParallaxMap("ParallaxMap", 2D) = "white" {} // 视差贴图
 		_ParallaxInensity("ParallaxInensity",Range(-5.0,5.0)) = 0.0
 		_AmbientInensity("AmbientInensity",Range(0,1.0)) = 0.0
@@ -59,6 +61,8 @@
 			float _RoughnessBrightness;
 			float _RoughnessMin;
 			float _RoughnessMax;
+			float _AOContrast;
+			float _AOBrightness;
 
 			struct appdata
 			{
@@ -221,7 +225,7 @@
 
 				//环境光遮蔽贴图
 				float4 aoMap = tex2D(_AOMap,data.uv_parallax);
-				finalColor *= aoMap.rgb;
+				finalColor *= pow(aoMap.rgb , _AOContrast) * _AOBrightness;	
 				//间接镜面反射_实时
 				finalColor = lerp(finalColor, ReatimeInDirectSpecCalc(speceMaskMap,data) * aoMap, _Reflectivity);
 
@@ -252,9 +256,13 @@
 
 			sampler2D _MainTex;
 			float4 _MainTex_ST;
+			float4 _Color;
 			sampler2D _NormalMap;
 			float _NormalInensity;
 			sampler2D _AOMap;
+			float _AOContrast;
+			float _AOBrightness;
+
 			sampler2D _SpecMaskMap;
 			float _SpecInensity;
 			sampler2D _ParallaxMap;
@@ -262,7 +270,12 @@
 			float _AmbientInensity;
 			float _Shininess;
 			float _Reflectivity;
-			float _Roughness;
+			sampler2D _Roughness;
+			float _RoughnessContrast;
+			float _RoughnessBrightness;
+			float _RoughnessMin;
+			float _RoughnessMax;
+			
 
 			struct appdata
 			{
@@ -333,11 +346,15 @@
 			}
 
 			//实时间接镜面反射（反射探针）
-			float3 ReatimeInDirectSpecCalc(float4 speceMaskMap,fragCalcData data) {
-				float4 env_color = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflect(-data.view_dir, data.normal) , _Roughness);
+			float3 ReatimeInDirectSpecCalc(float4 speceMaskMap, fragCalcData data) {
+				float4 roughness = tex2D(_Roughness, data.uv_parallax);
+				roughness = saturate(pow(roughness, _RoughnessContrast) * _RoughnessBrightness);
+				roughness = lerp(_RoughnessMin, _RoughnessMax, roughness);
+				roughness = roughness * (1.7 - 0.7 * roughness);
+				float miplevel = roughness * 9.0;
+
+				float4 env_color = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflect(-data.view_dir, data.normal), roughness);
 				return DecodeHDR(env_color, unity_SpecCube0_HDR);
-				//float4 env_color = texCube(_CubeMap, reflect(-view_dir, normal));
-				//float3 env_decode_color = DecodeHDR(env_color, _CubeMap_HDR);
 			}
 
 			v2f vert(appdata v)
@@ -414,7 +431,7 @@
 
 				//环境光遮蔽贴图
 				float4 aoMap = tex2D(_AOMap,data.uv_parallax);
-				finalColor *= aoMap.rgb;
+				//finalColor *= pow(aoMap.rgb, _AOContrast) * _AOBrightness;
 
 				return float4(finalColor.rgb, 1.0);
 			}
