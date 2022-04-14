@@ -1,27 +1,36 @@
-﻿Shader "Learn/BlinPhong"
+﻿Shader "Learn/BlinPhong_Standard"
 {
 	Properties
 	{
+		[Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull Mode", Float) = 2
+		[Header(Base Color)]
+		[Space]
 		_MainTex("Albedo", 2D) = "white" {} 
 		_Color("AlbedoColor", Color) = (1.0,1.0,1.0,1.0)
-		_NormalMap("NormalMap", 2D) = "bump" {}
-		_NormalInensity("NormalMapPower",Range(0.0,1.0)) = 1.0
+		_NormalMap("Normal", 2D) = "bump" {}
+		_NormalStrength("NormalStrength",Range(-1.0,1.0)) = 1.0
+		_MetalMap("MetallicMap", 2D) = "black" {} 
+		_MetalMapOffset("MetallicMapOffset",Range(-1.0,1.0)) = 0.0
+		_MetalMapStrength("MetallicMapStrength",Range(0.0,10.0)) = 1.0
+		_ParallaxMap("HeightMap", 2D) = "white" {}
+		_ParallaxInensity("HeightMapStrength",Range(-5.0,5.0)) = 0.0
+		[Header(Direct Specular)]
+		[Space]
 		_SpecMaskMap("SpecMask", 2D) = "white" {}
-		_SpecMaskContrast("SpecMaskContrast",Range(0.0,10.0)) = 1.0
-		_SpecInensity("SpecInensity",Range(0.0,10.0)) = 1.0
+		_SpecMaskOffset("SpecMaskOffset",Range(-1.0,1.0)) = 0.0
+		_SpecInensity("SpecBrightness",Range(0.0,10.0)) = 1.0
 		_SpecRange("SpecRange",Range(0,1.0)) = 0.0
-		_AOMap("AOMap", 2D) = "white" {}
-		_AOContrast("AOContrast",Range(0.0,10.0)) = 1.0
-		_AOBrightness("AOBrightness",Range(0.0,10.0)) = 1.0
-		_ParallaxMap("ParallaxMap", 2D) = "white" {} // 视差贴图
-		_ParallaxInensity("ParallaxInensity",Range(-5.0,5.0)) = 0.0
+		[Header(InDirect Diffuse)]
+		[Space]
 		_AmbientInensity("AmbientInensity",Range(0,1.0)) = 0.0
-		_Reflectivity("Reflectivity",Range(0,1.0)) = 0.0
+		_AOMap("AOMap", 2D) = "white" {}
+		_AOMapOffset("AOMapOffset",Range(-1.0,1.0)) = 0.0
+		_AOBrightness("AOBrightness",Range(0.0,10.0)) = 1.0
+		[Header(InDirect Specular)]
+		[Space]
 		_Roughness("RoughnessMap",2D) = "black" {}
-		_RoughnessContrast("RoughnessContrast",Range(0.0,10.0)) = 1.0
-		_RoughnessBrightness("RoughnessBrightness",Range(0.0,10.0)) = 1.0
-		_RoughnessMin("RoughnessMin",Float) = 0.0
-		_RoughnessMax("RoughnessMax",Float) = 1.0
+		_RoughnessOffset("RoughnessMapOffset",Range(-1.0,1.0)) = 0.0
+		_RoughnessBrightness("RoughnessMapStrength",Range(0.0,10.0)) = 1.0
 	}
 
 	SubShader
@@ -31,7 +40,7 @@
 
 		Pass
 		{
-			Cull Off
+			Cull [_Cull]
 			Tags {"LightMode" = "ForwardBase"} //ForwardAdd
 			//Blend One One
 			CGPROGRAM
@@ -48,22 +57,22 @@
 			float4 _MainTex_ST;
 			float4 _Color;
 			sampler2D _NormalMap;
-			float _NormalInensity;
+			float _NormalStrength;
+			sampler2D _MetalMap;
+			float _MetalMapOffset;
+			float _MetalMapStrength;
 			sampler2D _SpecMaskMap;
-			float _SpecRange;
+			float _SpecMaskOffset;
 			float _SpecInensity;
-			float _SpecMaskContrast;
+			float _SpecRange;
 			sampler2D _ParallaxMap;
 			float _ParallaxInensity;
 			float _AmbientInensity;
-			float _Reflectivity;
 			sampler2D _Roughness;
-			float _RoughnessContrast;
+			float _RoughnessOffset;
 			float _RoughnessBrightness;
-			float _RoughnessMin;
-			float _RoughnessMax;
 			sampler2D _AOMap;
-			float _AOContrast;
+			float _AOMapOffset;
 			float _AOBrightness;
 
 			struct appdata
@@ -78,7 +87,7 @@
 			struct v2f
 			{
 				float4 pos : SV_POSITION;
-				float4 uv : TEXCOORD0; //x
+				float4 uv : TEXCOORD0;
 				float3 normal : TEXCOORD1;
 				float4 tangent : TEXCOORD2;
 				float4 worldPos:TEXCOORD3;
@@ -116,9 +125,9 @@
 
 			//实时直接漫反射
 			float3 RealTimeDirectDiffuseCalc(float3 mainTex ,fragCalcData data) {
-				float lightModel = max(0, dot(data.light_dir, data.normal));
+				float lightModel = max(0.0, dot(data.light_dir, data.normal));
 				//mainTex = pow (mainTex,2.2);
-				float3 diffuse = mainTex * lightModel * _Color;
+				float3 diffuse = mainTex.rgb * lightModel * _Color;
 				return diffuse * _LightColor0.rgb;
 			}
 
@@ -129,25 +138,24 @@
 				//float3 spec_color = max(0, dot(reflect_dir, view_dir));
 				//Blinn-phong 模型
 				float3 reflect_dir = normalize(data.light_dir + data.view_dir);
-				float3 spec_color = max(0, dot(reflect_dir, data.normal));
-				spec_color = pow(spec_color, 100.0 - _SpecRange * 100 ) * _SpecInensity;
-				float3 m_speceMaskMap = pow(speceMaskMap.rgb, _SpecMaskContrast);
-				return	m_speceMaskMap * spec_color * _LightColor0;
+				float3 spec_color_model = max(0.0, dot(reflect_dir, data.normal));
+				spec_color_model = pow(spec_color_model, 100.0 - _SpecRange * 100.0) ;
+				float3 m_speceMaskMap = saturate(speceMaskMap + _SpecMaskOffset) * _SpecInensity;
+				return	m_speceMaskMap * spec_color_model * _LightColor0;
 			}
 
 			//实时间接镜面反射（反射探针）
-			float3 ReatimeInDirectSpecCalc(float4 speceMaskMap,fragCalcData data) {
+			float3 ReatimeInDirectSpecCalc(fragCalcData data) {
 				float4 roughness = tex2D(_Roughness, data.uv_parallax);
-				roughness = saturate(pow(roughness, _RoughnessContrast) * _RoughnessBrightness);
-				roughness = lerp(_RoughnessMin, _RoughnessMax, roughness);
-				roughness = roughness * (1.7 - 0.7 * roughness);
-				float miplevel = roughness * 9.0;
-
-				float4 env_color = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflect(-data.view_dir, data.normal) , roughness);
-				return DecodeHDR(env_color, unity_SpecCube0_HDR);
-
-				//float4 env_color = texCube(_CubeMap, reflect(-view_dir, normal));
-				//float3 env_decode_color = DecodeHDR(env_color, _CubeMap_HDR);
+				roughness = saturate(roughness + _RoughnessOffset) * _RoughnessBrightness;
+				float3 m_reflect = reflect(-data.view_dir, data.normal);
+				float miplevel = roughness * 6.0;
+				//float4 env_color = texCUBE(_EnvCubeMap, m_reflect );
+				//float3 env_decode_color = DecodeHDR(env_color, _EnvCubeMap_HDR);
+				
+				float4 env_color = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, m_reflect, miplevel);
+				float3 env_decode_color = DecodeHDR(env_color, unity_SpecCube0_HDR);		
+				return env_decode_color;
 			}
 
 			v2f vert(appdata v)
@@ -167,13 +175,11 @@
 			float4 frag(v2f i) : SV_Target
 			{
 				fragCalcData data;
-
 				data.worldPos = i.worldPos;
 				data.view_dir = normalize(_WorldSpaceCameraPos - data.worldPos);
 				data.binormal = cross(i.normal, i.tangent.xyz) * i.tangent.w;
 				data.TBN = float3x3(normalize(i.tangent.xyz), normalize(data.binormal), normalize(i.normal));
 				data.view_tangentSpace = normalize(mul(data.TBN,data.view_dir));
-
 				//float3 light_dir = normalize(_WorldSpaceLightPos0);
 				#ifdef USING_DIRECTIONAL_LIGHT
 					data.light_dir = normalize(_WorldSpaceLightPos0);
@@ -191,65 +197,64 @@
 				float4 speceMaskMap = tex2D(_SpecMaskMap, data.uv_parallax);
 				float4 normalMap = tex2D(_NormalMap, data.uv_parallax); //法线贴图
 				float3 normal_data = UnpackNormal(normalMap);
-				data.normal = normalize(i.tangent * normal_data.x * _NormalInensity + data.binormal * normal_data.y * _NormalInensity + i.normal * normal_data.z);
+				data.normal = normalize(i.tangent * normal_data.x * _NormalStrength + data.binormal * normal_data.y * _NormalStrength + i.normal * normal_data.z);
 
 				float3 finalColor;
 
+				float3 direct_diffuse = float3(0,0,0);
+				float3 direct_spec = float3(0,0,0);
+				float3 indirect_diffuse = float3(0,0,0);
+				float3 indirect_spec = float3(0,0,0);
+				float m_atten = 1.0;
 				//LightMap烘培判断
 				#if defined(LIGHTMAP_ON) && defined(SHADOWS_SHADOWMASK) //MixedLight
 					float3 c_lm = DecodeLightmap(UNITY_SAMPLE_TEX2D(unity_Lightmap, i.uv.zw));
-					finalColor = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
-					//直接高光_实时
-					finalColor += ReatimeDirectSpecCalc(speceMaskMap,data);
-					float3 reflect_dir = normalize(data.light_dir + data.view_dir);
-					float3 spec_color = max(0, dot(reflect_dir, data.normal));
-					spec_color = pow(spec_color, _SpecRange) * _SpecInensity * speceMaskMap.rgb;
-
-					//阴影与光线衰减_实时
-					UNITY_LIGHT_ATTENUATION(atten, i, data.worldPos);
-					finalColor *= atten;
+					direct_diffuse = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
+					direct_spec = ReatimeDirectSpecCalc(speceMaskMap,data); //直接高光_实时
+					UNITY_LIGHT_ATTENUATION(atten, i, data.worldPos); //阴影与光线衰减_实时
+					m_atten = atten;
 					//间接漫反射_烘培
-					finalColor += c_lm * mainTex * _Color;
+					indirect_diffuse = c_lm * mainTex * _Color;
 
 				#elif defined(LIGHTMAP_ON) && !defined(SHADOWS_SHADOWMASK) //BakedLight
 					float3 c_lm = DecodeLightmap(UNITY_SAMPLE_TEX2D(unity_Lightmap, i.uv.zw));
 					//直接漫反射+间接漫反射+阴影与光线衰减_烘培
-					finalColor = c_lm * mainTex * _Color;
+					direct_diffuse = c_lm * mainTex * _Color;
 				#elif defined(LIGHTMAP_OFF) //realtime light
-					finalColor = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
-					//直接高光_实时
-					finalColor += ReatimeDirectSpecCalc(speceMaskMap,data);
-
-					//阴影与光线衰减_实时
+					direct_diffuse = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
+					direct_spec = ReatimeDirectSpecCalc(speceMaskMap,data); //直接高光_实时
 					UNITY_LIGHT_ATTENUATION(atten, i, data.worldPos);
-					finalColor *= atten;
-					//间接漫反射_环境光_实时
+					m_atten = atten;
 					float3 ambient = UNITY_LIGHTMODEL_AMBIENT.rgb;
-					finalColor += ambient * _AmbientInensity;
-					//间接漫反射_SH间接光_实时
-					finalColor += i.SHLighting * mainTex * _Color;
-
+					indirect_diffuse = (ambient +  i.SHLighting) * _AmbientInensity * mainTex; //间接漫反射
 				#endif
-
+				//间接镜面反射
+				indirect_spec = ReatimeInDirectSpecCalc(data);
+				//金属度
+				float4 _MetalMexTex = tex2D(_MetalMap,data.uv_parallax);
+				float metalValue = saturate(_MetalMexTex + _MetalMapOffset) * _MetalMapStrength;	
 				//环境光遮蔽贴图
 				float4 aoMap = tex2D(_AOMap,data.uv_parallax);
-				finalColor *= pow(aoMap.rgb , _AOContrast) * _AOBrightness;	
-				//间接镜面反射_实时
-				finalColor = lerp(finalColor, ReatimeInDirectSpecCalc(speceMaskMap,data) * aoMap, _Reflectivity);
+				float aoValue= saturate(aoMap + _AOMapOffset) * _AOBrightness;	
+
+				float3 not_metal = (direct_diffuse * aoValue + direct_spec ) * m_atten  + indirect_diffuse;
+				float3 is_metal =  direct_spec * m_atten + indirect_spec;
+
+				finalColor = lerp(not_metal,is_metal,metalValue);
 
 				//高动态范围
 				//finalColor = ACESFilm(finalColor);
 				//finalColor = pow(finalColor , 1.0 /2.2);
-				//finalColor = lerp(finalColor, env_decode_color* speceMaskMap * aoMap, _Reflectivity);
-
-				return float4(finalColor.rgb, 1.0);
+				
+				return float4(finalColor , 1.0);
 			}
 			ENDCG
 		}
 
+		
 		Pass
 		{
-			Cull Off
+			Cull [_Cull]
 			Tags {"LightMode" = "ForwardAdd"} //ForwardAdd
 			Blend One One
 			CGPROGRAM
@@ -266,24 +271,29 @@
 			float4 _MainTex_ST;
 			float4 _Color;
 			sampler2D _NormalMap;
-			float _NormalInensity;
+			float _NormalStrength;
+			sampler2D _MetalMap;
+			float _MetalMapOffset;
+			float _MetalMapStrength;
+
+
 			sampler2D _SpecMaskMap;
-			float _SpecRange;
+			float _SpecMaskOffset;
 			float _SpecInensity;
-			float _SpecMaskContrast;
+			float _SpecRange;
+
 			sampler2D _ParallaxMap;
 			float _ParallaxInensity;
 			float _AmbientInensity;
-			float _Reflectivity;
+			//samplerCUBE _EnvCubeMap;
+			//float4 _EnvCubeMap_HDR;
+
 			sampler2D _Roughness;
-			float _RoughnessContrast;
+			float _RoughnessOffset;
 			float _RoughnessBrightness;
-			float _RoughnessMin;
-			float _RoughnessMax;
 			sampler2D _AOMap;
-			float _AOContrast;
+			float _AOMapOffset;
 			float _AOBrightness;
-			
 
 			struct appdata
 			{
@@ -297,7 +307,7 @@
 			struct v2f
 			{
 				float4 pos : SV_POSITION;
-				float4 uv : TEXCOORD0; 
+				float4 uv : TEXCOORD0;
 				float3 normal : TEXCOORD1;
 				float4 tangent : TEXCOORD2;
 				float4 worldPos:TEXCOORD3;
@@ -335,35 +345,37 @@
 
 			//实时直接漫反射
 			float3 RealTimeDirectDiffuseCalc(float3 mainTex ,fragCalcData data) {
-				float lightModel = max(0, dot(data.light_dir, data.normal));
+				float lightModel = max(0.0, dot(data.light_dir, data.normal));
 				//mainTex = pow (mainTex,2.2);
-				float3 diffuse = mainTex * lightModel;
+				float3 diffuse = mainTex.rgb * lightModel * _Color;
 				return diffuse * _LightColor0.rgb;
 			}
 
-			//实时直接镜面反射
+			//实时直接镜面反射(高光)
 			float3 ReatimeDirectSpecCalc(float4 speceMaskMap,fragCalcData data) {
 				//Phong 模型 耗性能
 				//float3 reflect_dir = reflect(-light_dir, normal);
 				//float3 spec_color = max(0, dot(reflect_dir, view_dir));
 				//Blinn-phong 模型
 				float3 reflect_dir = normalize(data.light_dir + data.view_dir);
-				float3 spec_color = max(0, dot(reflect_dir, data.normal));
-				spec_color = pow(spec_color, 100.0 - _SpecRange * 100) * _SpecInensity;
-				float3 m_speceMaskMap = pow(speceMaskMap.rgb, _SpecMaskContrast);
-				return	m_speceMaskMap * spec_color * _LightColor0;
+				float3 spec_color_model = max(0.0, dot(reflect_dir, data.normal));
+				spec_color_model = pow(spec_color_model, 100.0 - _SpecRange * 100.0) ;
+				float3 m_speceMaskMap = saturate(speceMaskMap + _SpecMaskOffset) * _SpecInensity;
+				return	m_speceMaskMap * spec_color_model * _LightColor0;
 			}
 
 			//实时间接镜面反射（反射探针）
-			float3 ReatimeInDirectSpecCalc(float4 speceMaskMap, fragCalcData data) {
+			float3 ReatimeInDirectSpecCalc(fragCalcData data) {
 				float4 roughness = tex2D(_Roughness, data.uv_parallax);
-				roughness = saturate(pow(roughness, _RoughnessContrast) * _RoughnessBrightness);
-				roughness = lerp(_RoughnessMin, _RoughnessMax, roughness);
-				roughness = roughness * (1.7 - 0.7 * roughness);
-				float miplevel = roughness * 9.0;
-
-				float4 env_color = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflect(-data.view_dir, data.normal), roughness);
-				return DecodeHDR(env_color, unity_SpecCube0_HDR);
+				roughness = saturate(roughness + _RoughnessOffset) * _RoughnessBrightness;
+				float3 m_reflect = reflect(-data.view_dir, data.normal);
+				float miplevel = roughness * 6.0;
+				//float4 env_color = texCUBE(_EnvCubeMap, m_reflect );
+				//float3 env_decode_color = DecodeHDR(env_color, _EnvCubeMap_HDR);
+				
+				float4 env_color = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, m_reflect, miplevel);
+				float3 env_decode_color = DecodeHDR(env_color, unity_SpecCube0_HDR);		
+				return env_decode_color;
 			}
 
 			v2f vert(appdata v)
@@ -383,13 +395,11 @@
 			float4 frag(v2f i) : SV_Target
 			{
 				fragCalcData data;
-
 				data.worldPos = i.worldPos;
 				data.view_dir = normalize(_WorldSpaceCameraPos - data.worldPos);
 				data.binormal = cross(i.normal, i.tangent.xyz) * i.tangent.w;
 				data.TBN = float3x3(normalize(i.tangent.xyz), normalize(data.binormal), normalize(i.normal));
 				data.view_tangentSpace = normalize(mul(data.TBN,data.view_dir));
-
 				//float3 light_dir = normalize(_WorldSpaceLightPos0);
 				#ifdef USING_DIRECTIONAL_LIGHT
 					data.light_dir = normalize(_WorldSpaceLightPos0);
@@ -407,46 +417,54 @@
 				float4 speceMaskMap = tex2D(_SpecMaskMap, data.uv_parallax);
 				float4 normalMap = tex2D(_NormalMap, data.uv_parallax); //法线贴图
 				float3 normal_data = UnpackNormal(normalMap);
-				data.normal = normalize(i.tangent * normal_data.x * _NormalInensity + data.binormal * normal_data.y * _NormalInensity + i.normal * normal_data.z);
+				data.normal = normalize(i.tangent * normal_data.x * _NormalStrength + data.binormal * normal_data.y * _NormalStrength + i.normal * normal_data.z);
 
 				float3 finalColor;
 
+				float3 direct_diffuse = float3(0,0,0);
+				float3 direct_spec = float3(0,0,0);
+
+				float3 indirect_spec = float3(0,0,0);
+				float m_atten = 1.0;
 				//LightMap烘培判断
 				#if defined(LIGHTMAP_ON) && defined(SHADOWS_SHADOWMASK) //MixedLight
 					float3 c_lm = DecodeLightmap(UNITY_SAMPLE_TEX2D(unity_Lightmap, i.uv.zw));
-					finalColor = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
-					//直接高光_实时
-					finalColor += ReatimeDirectSpecCalc(speceMaskMap,data);
-					//阴影与光线衰减_实时
-					UNITY_LIGHT_ATTENUATION(atten, i, data.worldPos);
-					finalColor *= atten;
-					//间接漫反射_烘培
-					finalColor += c_lm * mainTex;
-
+					direct_diffuse = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
+					direct_spec = ReatimeDirectSpecCalc(speceMaskMap,data); //直接高光_实时
+					UNITY_LIGHT_ATTENUATION(atten, i, data.worldPos); //阴影与光线衰减_实时
+					m_atten = atten;
 				#elif defined(LIGHTMAP_ON) && !defined(SHADOWS_SHADOWMASK) //BakedLight
 					float3 c_lm = DecodeLightmap(UNITY_SAMPLE_TEX2D(unity_Lightmap, i.uv.zw));
 					//直接漫反射+间接漫反射+阴影与光线衰减_烘培
-					finalColor = c_lm * mainTex;
-
+					direct_diffuse = c_lm * mainTex * _Color;
 				#elif defined(LIGHTMAP_OFF) //realtime light
-					finalColor = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
-					//直接高光_实时
-					finalColor += ReatimeDirectSpecCalc(speceMaskMap,data);
-					//阴影与光线衰减_实时
+					direct_diffuse = RealTimeDirectDiffuseCalc(mainTex,data); //直接漫反射_实时
+					direct_spec = ReatimeDirectSpecCalc(speceMaskMap,data); //直接高光_实时
 					UNITY_LIGHT_ATTENUATION(atten, i, data.worldPos);
-					finalColor *= atten;
-
+					m_atten = atten;
 				#endif
-
+				//间接镜面反射
+				indirect_spec = ReatimeInDirectSpecCalc(data);
+				//金属度
+				float4 _MetalMexTex = tex2D(_MetalMap,data.uv_parallax);
+				float metalValue = saturate(_MetalMexTex + _MetalMapOffset) * _MetalMapStrength;	
 				//环境光遮蔽贴图
 				float4 aoMap = tex2D(_AOMap,data.uv_parallax);
-				//finalColor *= pow(aoMap.rgb, _AOContrast) * _AOBrightness;
+				float aoValue= saturate(aoMap + _AOMapOffset) * _AOBrightness;	
 
-				return float4(finalColor.rgb, 1.0);
+				float3 not_metal = (direct_diffuse * aoValue + direct_spec ) * m_atten ;
+				float3 is_metal =  direct_spec * m_atten + indirect_spec;
+
+				finalColor = lerp(not_metal,is_metal,metalValue);
+
+				//高动态范围
+				//finalColor = ACESFilm(finalColor);
+				//finalColor = pow(finalColor , 1.0 /2.2);
+				
+				return float4(finalColor , 1.0);
 			}
 			ENDCG
 		}
-
 
 		Pass
 		{
@@ -487,9 +505,7 @@
 				metaIN.Emission = 0;
 				return UnityMetaFragment(metaIN);
 			}
-
 			ENDCG
-
 		}
 	}
 	Fallback "Diffuse"

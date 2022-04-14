@@ -1,5 +1,5 @@
 // 玉石材质
-Shader "Unlit/Jade"
+Shader "Learn/Jade"
 {
     Properties
     {
