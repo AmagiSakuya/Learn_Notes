@@ -1,27 +1,28 @@
-﻿Shader "Learn/OverHitChar"
+﻿Shader "Learn/OverHitCharHair"
 {
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
         _NormalMap("Normal", 2D) = "bump" {}
         _NormalStrength("NormalStrength",Range(-1.0,1.0)) = 1.0
-        _CompMask("CompMask[AO/Metal]", 2D) = "white" {}
-        _SpecSmooth("SpecSmooth",Range(0.01,100.0)) = 1.0
-        _SpecInensity("SpecInensity",Range(0.01,100.0)) = 1.0
+        _AnisoMap("_AnisoMap",2D ) = "gray" {}
+
+        _SpecColor1("Specular Color",Color) =(1,1,1,1)
+        _SpecShininess1("Spec Shininess",Range(0.0,1.0)) = 0.1
+        _SpecNoise1( "Spec Noise",Range(-1.0,1.0))= 0
+        _SpecOffset1("Spec Offset",Range(-1.0,1.0)) = 0
+
+        _SpecColor2("Specular Color_2",Color) =(1,1,1,1)
+        _SpecShininess2("Spec Shininess_2",Range(0.0,1.0)) = 0.1
+        _SpecNoise2( "Spec Noise_2",Range(-1.0,1.0))= 0
+        _SpecOffset2("Spec Offset_2",Range(-1.0,1.0)) = 0
 
         _EnvCubeMap("EnvCubeMap",CUBE) = ""{}
         _EnvCubeRotate("EnvCubeRotate",Range(-1,1)) = 0.0
-        
-        _SSS_Skin_RampMap("SSS_Skin_RampMap", 2D) = "black" {}
-        _CurveFactor("CurveFactor ",Range(0.0,1.0)) = 0.0
 
         _FresnelCol("FresnelCol ",COLOR) = (1,1,1,1)
         _FresnelScale("FresnelScale ",Range(0.0,1.0)) = 0.0
         
-        _KelemenLUT("KelemenLUT", 2D) = "black" {}
-        _KelemenScale("KelemenScale ",Float) = 100.0
-        _KelemenBrightness("KelemenBrightness ",Float) = 10.0
-
         [Space(50)]
         custom_SHAr("Custom SHAr", Vector) = (0,0,0,0)
         custom_SHAg("Custom SHAg",Vector) = (0,0,0,0)
@@ -35,7 +36,6 @@
         [Toggle] _DIRRECT_SPEC("DIRRECT_SPEC",Float) = 1
         [Toggle] _INDIRRECT_DIFFUSE("INDIRRECT_DIFFUSE",Float) = 1
         [Toggle] _INDIRRECT_SPEC("INDIRRECT_SPEC",Float) = 1
-        [Toggle] _SKIN_SPEC("SKIN_SPEC",Float) = 1
     }
 
     SubShader
@@ -57,7 +57,6 @@
             #pragma multi_compile _ _DIRRECT_SPEC_ON
             #pragma multi_compile _ _INDIRRECT_DIFFUSE_ON
             #pragma multi_compile _ _INDIRRECT_SPEC_ON
-            #pragma multi_compile _ _SKIN_SPEC_ON
 
             #include "UnityCG.cginc"
             #include "AutoLight.cginc"
@@ -86,19 +85,24 @@
             float4 _MainTex_ST;
             sampler2D _NormalMap;
             float _NormalStrength;
-            sampler2D _CompMask;
-            float _SpecSmooth;
-            float _SpecInensity;
+            sampler2D _AnisoMap;
+            float4 _AnisoMap_ST;
+
+            float4 _SpecColor1;
+            float _SpecShininess1;
+            float _SpecNoise1;
+            float _SpecOffset1;
+
+            float4 _SpecColor2;
+            float _SpecShininess2;
+            float _SpecNoise2;
+            float _SpecOffset2;
+
             samplerCUBE _EnvCubeMap;
             float4 _EnvCubeMap_HDR;
             float _EnvCubeRotate;
-            sampler2D _SSS_Skin_RampMap;
-            float _CurveFactor;
             float _FresnelScale;
             float4 _FresnelCol;
-            sampler2D _KelemenLUT;
-            float _KelemenScale;
-            float _KelemenBrightness;
 
             float4 custom_SHAr;
             float4 custom_SHAg;
@@ -133,7 +137,7 @@
                 v2f o;
                 o.pos = UnityObjectToClipPos(v.vertex);
                 o.worldPos = mul(unity_ObjectToWorld, v.vertex);
-                o.uv.xy = TRANSFORM_TEX(v.uv, _MainTex);
+                o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 o.normal = UnityObjectToWorldNormal(v.normal); // normalize(mul(v.normal, unity_WorldToObject));
                 o.tangent = normalize(mul(unity_ObjectToWorld, v.tangent));
                 o.SHLighting = ShadeSH9(float4(o.normal, 1));
@@ -145,7 +149,7 @@
             {
                 
                 float3 view_dir = normalize(_WorldSpaceCameraPos - i.worldPos);
-                float3 binormal = cross(i.normal, i.tangent.xyz) * i.tangent.w;
+                float3 binormal = normalize(cross(i.normal, i.tangent.xyz) * i.tangent.w );
                 float3x3 TBN = float3x3(normalize(i.tangent.xyz), normalize(binormal), normalize(i.normal));
                 float3 view_tangentSpace = normalize(mul(TBN,view_dir));
                 #ifdef USING_DIRECTIONAL_LIGHT
@@ -153,73 +157,62 @@
                 #else
                     float3 light_dir = normalize(_WorldSpaceLightPos0 - i.worldPos);
                 #endif 
-
+                
                 float4 normalMap = tex2D(_NormalMap, i.uv); //法线贴图
                 float3 normal_data = UnpackNormal(normalMap);
                 float3 normal = normalize(i.tangent * normal_data.x * _NormalStrength + binormal * normal_data.y * _NormalStrength + i.normal * normal_data.z);
 
-                //Mask贴图
-                float4 maskTex = tex2D(_CompMask, i.uv);
-                
-                float roughness = maskTex.r;
-                float metal = maskTex.g;
-                float skinMask = (1.0 - maskTex.b);
-                float4 albedo = tex2D(_MainTex, i.uv);
 
-                //区分金属部分
-                float3 base_metal_color = lerp(0, albedo, metal);
+                float4 albedo = tex2D(_MainTex, i.uv);
                 
                 UNITY_LIGHT_ATTENUATION(atten, i, i.worldPos);
 
                 //直接漫反射
                 //float lightModel = (dot(light_dir, normal) + 1) * 0.5;
                 float diffuse_term = max(0, dot(light_dir, normal));
-
-                //SSS_Skin_RampMask 
-                float cuv = saturate(_CurveFactor * (length(fwidth(normal)) / length(fwidth(i.worldPos))));
-                float2 skinUV = float2(diffuse_term * 0.5 + 0.5, cuv);
-                float3 sssSkinRamp = tex2D(_SSS_Skin_RampMap, skinUV) * skinMask;
+                float half_lambert = (diffuse_term *0.5 + 0.5);
                 
                 #ifdef _DIRRECT_DIFFUSE_ON
-                    float3 directDiffuse = (albedo * sssSkinRamp + albedo * (1.0 - skinMask) * diffuse_term) * atten  * _LightColor0.rgb;
+                    float3 directDiffuse = half_lambert* albedo;
                 #else
                     float3 directDiffuse = float3(0,0,0);
                 #endif
 
-                //直接高光
-                float3 blin_reflect_dir = normalize(light_dir + view_dir);
-                float NdotR = dot(normal, blin_reflect_dir);
-                float smoothness = 1.0 - roughness;
-                float shininess = lerp(1, _SpecSmooth, smoothness);
-                float3 spec_color_model = pow(max(0.0, NdotR), shininess * smoothness);
+                //直接高光 (各向异性高光)
+                float uv_aniso = i.uv * _AnisoMap_ST.xy + _AnisoMap_ST.zw;
+                float aniso_noise = (tex2D(_AnisoMap, uv_aniso).r - 0.5)*2;
 
+                float3 half_dir = normalize(light_dir + view_dir);
+                float  NdotH = dot(normal , half_dir);
+                float TdotH = dot(half_dir,i.tangent);
+
+                float NdotV = max(0.0,dot(normal,view_dir));
+                float aniso_atten = saturate(sqrt(max(0.0,half_lambert / NdotV ))) * atten; 
+                
+                float3 aniso_offset = normal * (aniso_noise * _SpecNoise1 + _SpecOffset1);
+                float3 binormal_aniso = normalize(binormal + aniso_offset);
+                float3 BdotH = dot(half_dir,binormal_aniso) / _SpecShininess1;
+                float3 spec_term = exp(-(TdotH * TdotH + BdotH * BdotH)/(1.0 + NdotH));
+
+                float3 aniso_offset_2 = normal * (aniso_noise * _SpecNoise2 + _SpecOffset2);
+                float3 binormal_aniso_2 = normalize(binormal + aniso_offset_2);
+                float3 BdotH_2 = dot(half_dir,binormal_aniso_2) / _SpecShininess2;
+                //float3 spec_term = sqrt(1.0 - BdotH * BdotH);
+                float3 spec_term_2 = exp(-(TdotH * TdotH + BdotH_2 * BdotH_2)/(1.0 + NdotH));
+                
                 #ifdef _DIRRECT_SPEC_ON
-                    float3 directSpec = base_metal_color * spec_color_model * _LightColor0 * _SpecInensity;
+                    float3 directSpec = (spec_term * _SpecColor1  +spec_term_2* _SpecColor2)* _LightColor0 * aniso_atten;
                 #else
                     float3 directSpec = float3(0,0,0);
-                #endif
+                #endif 
 
-                // 皮肤油脂
-                float3 L = normalize(_WorldSpaceLightPos0 - i.worldPos);
-                float3 h = L + view_dir;
-                float3 H = normalize(h);
-                float NoH = dot(normal , H);
-                float3 test =2.0* tex2D(_KelemenLUT,float2(NoH, roughness));
-                float PH = pow(2.0 * tex2D(_KelemenLUT,saturate(float2(NoH, roughness))) , 10.0 );
-                float F = 0.028;//fresnelReflectance( H, view_dir, 0.028 );
-                float3 frSpec = max( PH * F / dot( h, h ), 0 ) * _KelemenScale;
-                float3 res = dot(normal,L) * _KelemenBrightness * frSpec *  skinMask * directDiffuse;
-                
-                #ifdef _SKIN_SPEC_ON
-                    directSpec+= res;
-                #endif
-                
                 //间接漫反射 （离线球谐）
                 #ifdef _INDIRRECT_DIFFUSE_ON
                     float3 indirDiffuse = custoumSH(normal) * albedo;
                 #else
                     float3 indirDiffuse = float3(0,0,0);
                 #endif 
+
                 
                 //间接镜面反射
                 float3 reflect_dir = reflect(-view_dir, normal);
@@ -229,9 +222,9 @@
                 reflect_dir = float3(dir_rot.x, dir_rot.y, dir_rot.y);
                 float4 env_color = texCUBE(_EnvCubeMap, reflect_dir);
                 float3 env_decode_color = DecodeHDR(env_color, _EnvCubeMap_HDR);
-                
+
                 #ifdef _INDIRRECT_SPEC_ON
-                    float3 indirSpec = env_decode_color * base_metal_color;
+                    float3 indirSpec = env_decode_color * albedo;
                 #else
                     float3 indirSpec = float3(0,0,0);
                 #endif 
@@ -247,6 +240,39 @@
             }
             ENDCG
         }
+
+        // Pass {
+            //    Name "ShadowCaster"
+            //    Tags { "LightMode" = "ShadowCaster" }
+            //    CGPROGRAM
+            //    #pragma vertex vert
+            //    #pragma fragment frag
+            //    #pragma target 2.0
+            //    #pragma multi_compile_shadowcaster
+            //    #pragma multi_compile_instancing // allow instanced shadow pass for most of the shaders
+            //    #include "UnityCG.cginc"
+            //    struct v2f {
+                //        V2F_SHADOW_CASTER;
+                //        UNITY_VERTEX_OUTPUT_STEREO
+            //    };
+            //    v2f vert( appdata_base v )
+            //    {
+                //        // hackity hack hack hack!
+                //        // prevents the bias settings from having any affect on this shader's shadows
+                //        unity_LightShadowBias = float4(0,0,0,0);
+                
+                //        v2f o;
+                //        UNITY_SETUP_INSTANCE_ID(v);
+                //        UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+                //        TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)
+                //        return o;
+            //    }
+            //    float4 frag( v2f i ) : SV_Target
+            //    {
+                //        SHADOW_CASTER_FRAGMENT(i)
+            //    }
+            //    ENDCG
+        //}
     }
     Fallback "Diffuse"
 }
