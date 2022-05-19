@@ -94,20 +94,20 @@ Shader "Unlit/WaterUnlit"
                 float2 screen_uv = i.screenPos.xy / i.screenPos.w;
                 //screen_uv = (screen_uv + 1.0) * 0.5;
                
-                //waterNormalÆ«ÒÆ
+                //waterNormalåç§»
                 float2 uv_WaterNormal = i.uv * _WaterNormal_ST.xy + _WaterNormal_ST.zw;
                 float2 waterUV = uv_WaterNormal + _Time.x * _WaterSpeed;
                 float3 waterNormal = UnpackNormal(tex2D(_WaterNormal, waterUV));
                 float2 waterUV2 = uv_WaterNormal + _Time.x * (-_WaterSpeed);
                 float3 waterNormal2 = UnpackNormal(tex2D(_WaterNormal, waterUV2));
                 waterNormal = BlendNormals(waterNormal, waterNormal2);
-                //Ï÷ÈõÊÓÒ°Ô¶´¦waterNormal tillingÖµ
+                //å‰Šå¼±è§†é‡è¿œå¤„waterNormal tillingå€¼
                 waterNormal.xy = waterNormal.xy / (i.pos.w + 1.0);
                 float2 reflectUV = screen_uv + waterNormal.xy * _WaterNormalInstensity;
                 
                 float4 reflectionColor = tex2D(_ReflectionTex, reflectUV) * _Color;
 
-                //¸ß¹â
+                //é«˜å…‰
                 #ifdef USING_DIRECTIONAL_LIGHT
                     float3 light_dir = normalize(_WorldSpaceLightPos0.xyz);
                 #else
@@ -120,12 +120,12 @@ Shader "Unlit/WaterUnlit"
                 float2 reflectBlinkUV = screen_uv + waterNormal.xy * (_WaterNormalInstensity + _BlinkInstensity);
                 float4 blinkColor = tex2D(_ReflectionTex, reflectBlinkUV) * _Color;
                 blinkColor = max(0.0, blinkColor - _BlinkThreshold);
-                //ÏßĞÔÎí·½Ê½Èá»¯Ô¶¶Ë
+                //çº¿æ€§é›¾æ–¹å¼æŸ”åŒ–è¿œç«¯
                 float m_distance = distance(i.worldPos, _WorldSpaceCameraPos);
                 float m_linefog = clamp((_SpecStartEnd.y - m_distance) / (_SpecStartEnd.y - _SpecStartEnd.x), 0.0, 1.0);
                 spec_color = spec_color * m_linefog;
                 //Underwater
-                //¸ß¶È
+                //é«˜åº¦
                 float3 view_tangentSpace = normalize(mul(TBN, view_dir));
                 float2 paralaxOffset = ParallaxOffset(0, _UnderwaterHeight, view_tangentSpace);
                 float2 uv_parallax  = (i.uv * _UnderwaterTex_ST.xy + _UnderwaterTex_ST.zw) + paralaxOffset;
@@ -133,7 +133,7 @@ Shader "Unlit/WaterUnlit"
 
                 float underwaterFresnel = (_UnderwaterFresnel.x + _UnderwaterFresnel.y * pow(max(1.0 - dot(view_dir, i.normal), 0.0001), _UnderwaterFresnel.z));
                 
-                //»ìºÏË®µ×ÌùÍ¼
+                //æ··åˆæ°´åº•è´´å›¾
                 float3 finalColor = lerp(underwaterColor + spec_color + blinkColor, reflectionColor, underwaterFresnel);
 
                 return float4(finalColor.xyz,1.0);

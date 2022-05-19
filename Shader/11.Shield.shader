@@ -119,7 +119,7 @@ Shader "Learn/Shield"
 		void surf(Input IN , inout SurfaceOutput o )
 		{
 			float hintRamp = 0.0;
-			//Êó±êµã»÷¼ÆËã
+			//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 			hintRamp = _Debug==0 ? HitRampArr(IN) : HitColor(IN,_HintPosition,_HintScale);
 			//flowMap
 			float3 flowMap = FlowMap(IN.uv2_MainTex);
@@ -127,7 +127,7 @@ Shader "Learn/Shield"
 			float NdotV =  dot( IN.viewDir ,IN.worldNormal) ;
 			float3 m_normal = (((NdotV>0)?(IN.worldNormal):(-IN.worldNormal)));
 			float fresnel =  ( _Fresnel.x + _Fresnel.y * pow( max( 1.0 - dot( IN.viewDir ,m_normal) , 0.0001 ), _Fresnel.z ) );
-			//depth±ßÔµ
+			//ä½¿ç”¨æŠ•å½±çº¹ç†é‡‡æ ·
 			float m_depth = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE_PROJ(_CameraDepthTexture, UNITY_PROJ_COORD(IN.proj)).r);
             float distance = (1.0 - (m_depth - IN.proj.z));
 			float powDistance = saturate(max(0.001,pow(distance,_DepthFadeDistance)));
